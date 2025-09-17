@@ -118,7 +118,9 @@ const palabrasOriginales = [
   "Hermenéutica", "Comprensión", "Subjetividad",
   "Ciencia", "Espíritu", "Experiencia", "Vivida"
 ];
+// Direcciones permitidas (sin palabras al revés)
 const DIRECCIONES = { H:{dx:1,dy:0}, V:{dx:0,dy:1}, D:{dx:1,dy:1} };
+// Mezcla mínima
 const MIN_REQ = {H:3, V:2, D:1};
 
 /* ===== Utiles ===== */
@@ -299,50 +301,46 @@ function checkSelection(){
   }
 }
 
-/* ===== Auto-resize real (ancho + alto + posición del grid) ===== */
+/* ===== Auto-resize (ajuste fino: ancho + alto + posición del grid) ===== */
 function viewportH(){
-  // usar visualViewport (móvil) si existe para evitar barras del navegador
-  return (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight;
+  return (window.visualViewport?.height) || window.innerHeight || document.documentElement.clientHeight;
 }
 function ajustarTamanoCeldas() {
   // Gap dinámico: más chico en móviles angostos
   const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
   let gapPx = 6;
-  if (vw < 380) gapPx = 4;
-  if (vw < 340) gapPx = 2;
+  if (vw < 420) gapPx = 4;
+  if (vw < 360) gapPx = 2;
   document.documentElement.style.setProperty('--grid-gap', gapPx + 'px');
 
-  // Datos base
   const gap = gapPx;
-  const ancho = $grid.clientWidth;             // ancho útil del grid
-  const vh = viewportH();                      // alto visible real
-  const top = $grid.getBoundingClientRect().top; // distancia desde el top del viewport
+  const ancho = $grid.clientWidth;                      // ancho útil del grid
+  const vh = viewportH();                               // alto visible real
+  const top = $grid.getBoundingClientRect().top;        // distancia del grid al borde superior
 
   // Tamaño por ancho
   const sizeW = Math.floor((ancho - (N - 1) * gap) / N);
 
-  // Tamaño por alto: queremos que el GRID quepa de una (sin tocar zoom)
-  // Dejamos margen inferior para el texto/scroll safe-area.
-  const margenInferior = 24;
-  // Porcentaje del alto restante para el grid (más conservador en móviles)
-  const pct = vw < 480 ? 0.50 : 0.56; // << ajusta aquí si lo querés aún más chico
-  const altoDisponible = Math.max(120, Math.floor((vh - top - margenInferior) * pct));
+  // Tamaño por alto (más conservador para que entre sin zoom)
+  const margenInferior = 28;
+  const factorAltura = vw < 520 ? 0.46 : 0.53;          // << ajuste fino
+  const altoDisponible = Math.max(120, Math.floor((vh - top - margenInferior) * factorAltura));
   const sizeH = Math.floor((altoDisponible - (N - 1) * gap) / N);
 
-  // Elegimos el menor para que no se corte ni en ancho ni en alto
+  // Elegimos el menor para que no se corte
   const size = Math.min(sizeW, sizeH);
 
   // Límites y derivados
-  const sizeClamped = Math.max(22, Math.min(size, 60));
-  const font = Math.max(12, Math.min(Math.round(sizeClamped * 0.46), 24));
-  const border = sizeClamped <= 28 ? 1 : (sizeClamped <= 36 ? 1.5 : 2);
+  const sizeClamped = Math.max(22, Math.min(size, 56));
+  const font = Math.max(12, Math.min(Math.round(sizeClamped * 0.44), 22));
+  const border = sizeClamped <= 26 ? 1 : (sizeClamped <= 34 ? 1.5 : 2);
 
   document.documentElement.style.setProperty('--cell-size', sizeClamped + 'px');
   document.documentElement.style.setProperty('--cell-font', font + 'px');
   document.documentElement.style.setProperty('--cell-border', border + 'px');
 }
 
-// Recalcular varias veces al cargar (por si el navegador mueve barras tras el primer paint)
+// Recalcular varias veces al cargar por si el navegador mueve barras tras el primer paint
 function rafBurst(times=5, fn){
   let i=0; const tick=()=>{ fn(); if(++i<times) requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
@@ -355,7 +353,6 @@ function iniciarObservadorResize() {
   ro.observe($grid);
   window.addEventListener('resize', ajustarTamanoCeldas);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', ajustarTamanoCeldas);
-  // fonts y primer render
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(()=> rafBurst(4, ajustarTamanoCeldas));
   }
