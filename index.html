@@ -13,6 +13,7 @@
     --grid-gap: 6px;
     --cell-size: 40px;
     --cell-font: 18px;
+    --cell-border: 2px;
   }
   *{box-sizing:border-box}
   body{
@@ -44,7 +45,7 @@
     aspect-ratio:1;
     display:grid; place-items:center;
     font-weight:700; font-size: var(--cell-font);
-    border:2px solid #cbd5e1; border-radius:10px; background:#fff;
+    border:var(--cell-border) solid #cbd5e1; border-radius:10px; background:#fff;
     transition:transform .05s ease, background .15s ease, border-color .15s ease;
   }
   .cell:active{ transform:scale(.98) }
@@ -64,7 +65,7 @@
     padding:10px 14px; border-radius:12px; border:1px solid #cbd5e1;
     background:#f1f5f9; font-weight:700; cursor:pointer;
   }
-  button.primary{ background:var(--accent); color:white; border-color:var(--accent) }
+  button.primary{ background:#2563eb; color:white; border-color:#2563eb }
 
   .footer{font-size:12px; color:#64748b; text-align:center; padding:16px}
 
@@ -81,7 +82,7 @@
 </style>
 </head>
 <body>
-<header><h1>🧩 Sopa de Letras 14×14</h1></header>
+<header><h1>🧩 Sopa de Letras</h1></header>
 
 <main>
   <section class="card">
@@ -117,9 +118,7 @@ const palabrasOriginales = [
   "Hermenéutica", "Comprensión", "Subjetividad",
   "Ciencia", "Espíritu", "Experiencia", "Vivida"
 ];
-// Direcciones permitidas (no hay palabras al revés en la grilla)
 const DIRECCIONES = { H:{dx:1,dy:0}, V:{dx:0,dy:1}, D:{dx:1,dy:1} };
-// Mezcla mínima deseada
 const MIN_REQ = {H:3, V:2, D:1};
 
 /* ===== Utiles ===== */
@@ -137,14 +136,10 @@ const $modalFin = document.getElementById('modalFin');
 const $btnCerrarModal = document.getElementById('btnCerrarModal');
 
 /* ===== Estado ===== */
-let state = {
-  grid:null, placements:null, found:new Set(),
-  selecting:false, path:[], startCell:null
-};
+let state = { grid:null, placements:null, found:new Set(), selecting:false, path:[], startCell:null };
 
 /* ===== Generación de sopa ===== */
 function generarSopa() {
-  // Asignar etiquetas de dirección por palabra para garantizar mezcla
   let dTags = [];
   dTags.push(...Array(MIN_REQ.H).fill('H'));
   dTags.push(...Array(MIN_REQ.V).fill('V'));
@@ -153,7 +148,7 @@ function generarSopa() {
 
   const orden = palabras.map((w,i)=>({w,i,len:w.length})).sort((a,b)=> b.len-a.len);
 
-  for (let intento=0; intento<200; intento++){
+  for (let intento=0; intento<250; intento++){
     const grid = Array.from({length:N}, ()=> Array(N).fill(''));
     const placements = [];
     const asignadas = [...dTags].sort(()=>Math.random()-0.5);
@@ -210,7 +205,6 @@ function dibujarLista(){
     div.append(b,t); $lista.append(div);
   });
 }
-
 function renderGrid(){
   $grid.innerHTML='';
   for (let y=0;y<N;y++){
@@ -226,8 +220,6 @@ function renderGrid(){
   }
   paintFound();
 }
-
-/* Pintar encontradas (persiste al redibujar) */
 function paintFound(){
   $grid.querySelectorAll('.cell').forEach(c=>c.classList.remove('found'));
   state.placements.forEach(p=>{
@@ -265,7 +257,7 @@ function pushCell(el){
   const last=state.path[state.path.length-1];
   if (last && last.x===x && last.y===y) return;
 
-  // Mantener línea: H, V o D (permitimos arrastrar también al revés para UX)
+  // Mantener línea: H, V o D (permitimos arrastrar al revés por UX)
   if (state.path.length>=1){
     const x0=state.path[0].x, y0=state.path[0].y;
     const dx=Math.sign(x-x0), dy=Math.sign(y-y0);
@@ -307,52 +299,67 @@ function checkSelection(){
   }
 }
 
-/* ===== Auto-resize (ancho + alto) para que el tablero entre sin zoom ===== */
+/* ===== Auto-resize real (ancho + alto + posición del grid) ===== */
+function viewportH(){
+  // usar visualViewport (móvil) si existe para evitar barras del navegador
+  return (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight;
+}
 function ajustarTamanoCeldas() {
-  // Ancho disponible del grid y alto total de la ventana
-  const style = getComputedStyle($grid);
-  // Gap dinámico según pantalla (más chico en móviles angostos)
+  // Gap dinámico: más chico en móviles angostos
   const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
   let gapPx = 6;
   if (vw < 380) gapPx = 4;
   if (vw < 340) gapPx = 2;
   document.documentElement.style.setProperty('--grid-gap', gapPx + 'px');
 
+  // Datos base
   const gap = gapPx;
-  const ancho = $grid.clientWidth;         // ancho útil del grid
-  const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+  const ancho = $grid.clientWidth;             // ancho útil del grid
+  const vh = viewportH();                      // alto visible real
+  const top = $grid.getBoundingClientRect().top; // distancia desde el top del viewport
 
-  // Tamaño por ancho (lo de antes)
-  const totalGapsW = (N - 1) * gap;
-  const sizeW = Math.floor((ancho - totalGapsW) / N);
+  // Tamaño por ancho
+  const sizeW = Math.floor((ancho - (N - 1) * gap) / N);
 
-  // Tamaño por alto: hacemos que el grid ocupe como máx. ~58% del alto del viewport
-  const maxGridH = Math.floor(vh * 0.58);
-  const totalGapsH = (N - 1) * gap;
-  const sizeH = Math.floor((maxGridH - totalGapsH) / N);
+  // Tamaño por alto: queremos que el GRID quepa de una (sin tocar zoom)
+  // Dejamos margen inferior para el texto/scroll safe-area.
+  const margenInferior = 24;
+  // Porcentaje del alto restante para el grid (más conservador en móviles)
+  const pct = vw < 480 ? 0.50 : 0.56; // << ajusta aquí si lo querés aún más chico
+  const altoDisponible = Math.max(120, Math.floor((vh - top - margenInferior) * pct));
+  const sizeH = Math.floor((altoDisponible - (N - 1) * gap) / N);
 
-  // Elegimos el menor de ambos para que no “explote” ni por ancho ni por alto
+  // Elegimos el menor para que no se corte ni en ancho ni en alto
   const size = Math.min(sizeW, sizeH);
 
-  // Límites razonables
+  // Límites y derivados
   const sizeClamped = Math.max(22, Math.min(size, 60));
-
-  // Letra proporcional
   const font = Math.max(12, Math.min(Math.round(sizeClamped * 0.46), 24));
+  const border = sizeClamped <= 28 ? 1 : (sizeClamped <= 36 ? 1.5 : 2);
 
   document.documentElement.style.setProperty('--cell-size', sizeClamped + 'px');
   document.documentElement.style.setProperty('--cell-font', font + 'px');
+  document.documentElement.style.setProperty('--cell-border', border + 'px');
 }
 
-let ro; // ResizeObserver
+// Recalcular varias veces al cargar (por si el navegador mueve barras tras el primer paint)
+function rafBurst(times=5, fn){
+  let i=0; const tick=()=>{ fn(); if(++i<times) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+
+let ro;
 function iniciarObservadorResize() {
   if (ro) ro.disconnect();
   ro = new ResizeObserver(() => ajustarTamanoCeldas());
   ro.observe($grid);
-  // También recalculamos con cambios de orientación/zoom del SO
-  window.matchMedia("(orientation: portrait)").addEventListener('change', ajustarTamanoCeldas);
   window.addEventListener('resize', ajustarTamanoCeldas);
-  ajustarTamanoCeldas(); // cálculo inicial
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', ajustarTamanoCeldas);
+  // fonts y primer render
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(()=> rafBurst(4, ajustarTamanoCeldas));
+  }
+  rafBurst(4, ajustarTamanoCeldas);
 }
 
 /* ===== Eventos ===== */
